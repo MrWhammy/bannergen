@@ -123,9 +123,6 @@ func readPath(path string) (image.Image, error) {
 }
 
 func parseArguments() (string, string) {
-	if len(os.Args) < 2 {
-		log.Fatal("Not enough arguments")
-	}
 	if len(os.Args) > 2 {
 		return os.Args[1], os.Args[2]
 	} else {
@@ -133,6 +130,11 @@ func parseArguments() (string, string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		return dir, os.Args[1]
+		sponsorDir := filepath.Join(dir, "sponsors")
+		if len(os.Args) > 1 {
+			return sponsorDir, os.Args[1]
+		} else {
+			return sponsorDir, "out.png"
+		}
 	}
 }
