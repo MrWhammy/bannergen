@@ -15,9 +15,21 @@ import (
 	"golang.org/x/image/draw"
 )
 
-type NamedImage struct {
-	img  image.Image
-	name string
+type Logo struct {
+	path string
+}
+
+func (l *Logo) readImage() image.Image {
+	f, err := os.Open(l.path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	img, _, err := image.Decode(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return img
 }
 
 const dimension = 200
@@ -30,34 +42,29 @@ func main() {
 		log.Fatal(err)
 	}
 
-	imgs := readImages(files, dir)
+	logos := readLogos(files, dir)
 
-	width, length, remainder := calculateDimensions(len(imgs))
+	width, length, remainder := calculateDimensions(len(logos))
 
-	var padder image.Image
-	if remainder > 0 {
-		padder, err = readPath("logo.png")
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+	padder := Logo{"logo.png"}
 
 	outImg := image.NewRGBA(image.Rect(0, 0, width*dimension, length*dimension))
-	for index, img := range imgs {
+	for index, logo := range logos {
 		x := (index % width)
 		y := (int(math.Floor(float64(index) / float64(width))))
 
-		if y == (length-1) && remainder == 2 {
+		bottomRow := y == (length - 1)
+		if bottomRow && remainder == 2 { // bottom row requires left padding
 			if x == 0 {
-				drawImage(padder, outImg, x, y)
+				drawImage(padder.readImage(), outImg, x, y)
 			}
 			x++
 		}
-		drawImage(img.img, outImg, x, y)
+		drawImage(logo.readImage(), outImg, x, y)
 	}
 
-	if remainder > 0 {
-		drawImage(padder, outImg, width-1, length-1)
+	if remainder > 0 { // padding required on the right
+		drawImage(padder.readImage(), outImg, width-1, length-1)
 	}
 
 	writeImage(out, outImg)
@@ -92,34 +99,20 @@ func writeImage(out string, outImg image.Image) {
 	png.Encode(myfile, outImg)
 }
 
-func readImages(files []fs.DirEntry, dir string) []NamedImage {
-	var imgs []NamedImage
+func readLogos(files []fs.DirEntry, dir string) []Logo {
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(files), func(i, j int) { files[i], files[j] = files[j], files[i] })
+	imgs := make([]Logo, 0, len(files))
 	for _, file := range files {
-		img, err := readFile(dir, file)
-		if err != nil {
-			log.Println(file.Name(), err)
-		}
+		img := readFile(dir, file)
 		imgs = append(imgs, img)
 	}
 	return imgs
 }
 
-func readFile(dir string, file fs.DirEntry) (NamedImage, error) {
+func readFile(dir string, file fs.DirEntry) Logo {
 	path := filepath.Join(dir, file.Name())
-	img, err := readPath(path)
-	return NamedImage{img, file.Name()}, err
-}
-
-func readPath(path string) (image.Image, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	img, _, err := image.Decode(f)
-	return img, err
+	return Logo{path}
 }
 
 func parseArguments() (string, string) {
