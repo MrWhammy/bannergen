@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"image"
 	_ "image/jpeg"
 	"image/png"
@@ -15,12 +16,13 @@ import (
 	"golang.org/x/image/draw"
 )
 
-type Logo struct {
-	path string
-}
+type logo string
 
-func (l *Logo) readImage() image.Image {
-	f, err := os.Open(l.path)
+//go:embed logo.png sponsors/*
+var logos embed.FS
+
+func (l *logo) readImage() *image.Image {
+	f, err := logos.Open(string(*l))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -29,15 +31,15 @@ func (l *Logo) readImage() image.Image {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return img
+	return &img
 }
 
 const dimension = 200
 
 func main() {
-	dir, out := parseArguments()
+	dir := "sponsors"
 
-	files, err := os.ReadDir(dir)
+	files, err := logos.ReadDir(dir)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -46,7 +48,7 @@ func main() {
 
 	width, length, remainder := calculateDimensions(len(logos))
 
-	padder := Logo{"logo.png"}
+	padder := logo("logo.png")
 
 	outImg := image.NewRGBA(image.Rect(0, 0, width*dimension, length*dimension))
 	for index, logo := range logos {
@@ -56,18 +58,18 @@ func main() {
 		bottomRow := y == (length - 1)
 		if bottomRow && remainder == 2 { // bottom row requires left padding
 			if x == 0 {
-				drawImage(padder.readImage(), outImg, x, y)
+				drawImage(*padder.readImage(), outImg, x, y)
 			}
 			x++
 		}
-		drawImage(logo.readImage(), outImg, x, y)
+		drawImage(*logo.readImage(), outImg, x, y)
 	}
 
 	if remainder > 0 { // padding required on the right
-		drawImage(padder.readImage(), outImg, width-1, length-1)
+		drawImage(*padder.readImage(), outImg, width-1, length-1)
 	}
 
-	writeImage(out, outImg)
+	writeImage("out.png", outImg)
 }
 
 func drawImage(img image.Image, outImg draw.Image, x int, y int) {
@@ -99,10 +101,10 @@ func writeImage(out string, outImg image.Image) {
 	png.Encode(myfile, outImg)
 }
 
-func readLogos(files []fs.DirEntry, dir string) []Logo {
+func readLogos(files []fs.DirEntry, dir string) []logo {
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(files), func(i, j int) { files[i], files[j] = files[j], files[i] })
-	imgs := make([]Logo, 0, len(files))
+	imgs := make([]logo, 0, len(files))
 	for _, file := range files {
 		img := readFile(dir, file)
 		imgs = append(imgs, img)
@@ -110,24 +112,7 @@ func readLogos(files []fs.DirEntry, dir string) []Logo {
 	return imgs
 }
 
-func readFile(dir string, file fs.DirEntry) Logo {
+func readFile(dir string, file fs.DirEntry) logo {
 	path := filepath.Join(dir, file.Name())
-	return Logo{path}
-}
-
-func parseArguments() (string, string) {
-	if len(os.Args) > 2 {
-		return os.Args[1], os.Args[2]
-	} else {
-		dir, err := os.Getwd()
-		if err != nil {
-			log.Fatal(err)
-		}
-		sponsorDir := filepath.Join(dir, "sponsors")
-		if len(os.Args) > 1 {
-			return sponsorDir, os.Args[1]
-		} else {
-			return sponsorDir, "out.png"
-		}
-	}
+	return logo(path)
 }
