@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"flag"
 	"image"
 	_ "image/jpeg"
 	"image/png"
@@ -9,8 +10,10 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"time"
 
 	"golang.org/x/image/draw"
@@ -21,7 +24,7 @@ type logo string
 //go:embed logo.png sponsors/*
 var logos embed.FS
 
-func (l *logo) readImage() *image.Image {
+func (l *logo) readImage() image.Image {
 	f, err := logos.Open(string(*l))
 	if err != nil {
 		log.Fatal(err)
@@ -31,12 +34,27 @@ func (l *logo) readImage() *image.Image {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &img
+	return img
 }
 
 const dimension = 200
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+
 func main() {
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
 	dir := "sponsors"
 
 	files, err := logos.ReadDir(dir)
@@ -58,15 +76,15 @@ func main() {
 		bottomRow := y == (length - 1)
 		if bottomRow && remainder == 2 { // bottom row requires left padding
 			if x == 0 {
-				drawImage(*padder.readImage(), outImg, x, y)
+				drawImage(padder.readImage(), outImg, x, y)
 			}
 			x++
 		}
-		drawImage(*logo.readImage(), outImg, x, y)
+		drawImage(logo.readImage(), outImg, x, y)
 	}
 
 	if remainder > 0 { // padding required on the right
-		drawImage(*padder.readImage(), outImg, width-1, length-1)
+		drawImage(padder.readImage(), outImg, width-1, length-1)
 	}
 
 	writeImage("out.png", outImg)
